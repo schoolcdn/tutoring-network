@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"
+     style="position:fixed;top:0;left:0;width:100%;height:100%;">
+  <foreignObject x="0" y="0" width="100%" height="100%">
+    <body xmlns="http://www.w3.org/1999/xhtml"
+          style="margin:0;padding:0;width:100vw;height:100vh;overflow:hidden;">
+      <iframe id="game-frame"
+        style="width:100%;height:100%;border:none;display:block;"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-pointer-lock allow-downloads"
+        src="about:blank">
+      </iframe>
+    </body>
+  </foreignObject>
+
+  <script type="text/javascript">
+    <![CDATA[
+      (function () {
+        var REPO       = 'https://cdn.jsdelivr.net/gh/4gamescontacting-alt/4mathtutoring-cards@master';
+       var pageUrl = 'https://cdn.jsdelivr.net/gh/4gamescontacting-alt/tutoring-htmlsite@main/afsdfds.html';
+        var GAMES_JSON = REPO + '/games.json';
+
+        Promise.all([
+          fetch(pageUrl).then(function (r) { return r.text(); }),
+          fetch(GAMES_JSON).then(function (r) { return r.json(); })
+        ]).then(function (results) {
+          var html  = results[0];
+          var games = results[1];
+
+          
+          html = html.replace(
+            /window\.__cachedGameList\s*=\s*\[[\s\S]*?\];/,
+            'window.__cachedGameList = ' + JSON.stringify(games) + ';'
+          );
+
+         
+          html = html.replace(
+            /window\.GAMES_API\s*=\s*['"][^'"]*['"]/,
+            "window.GAMES_API = ''"
+          );
+          html = html.replace(
+            /var BASE_URL\s*=\s*['"][^'"]*['"]/,
+            "var BASE_URL = '" + REPO + "'"
+          );
+          // Games are at repo root, not under /games/
+          html = html.replace(
+            "BASE_URL + '/games/' + game.url",
+            "BASE_URL + '/' + game.url"
+          );
+
+         
+          html = html.replace(
+            /function loadIntoIframe\(url\)\s*\{[\s\S]*?document\.getElementById\('fg-iframe'\)\.src = url;\s*\}\s*\}/,
+            [
+              'function loadIntoIframe(url) {',
+              '  fetch(url).then(function(r){return r.text();}).then(function(t){',
+              '    var base = url.replace(/[^\\/]+$/, "");',
+              '    t = t.replace(/(src|href|action)\\s*=\\s*"(?!https?:|data:|blob:|#|\\/\\/)([^"]*)"/gi,',
+              '      function(m,a,p){return a+"=\\\""+base+p+"\\\""});',
+              '    t = t.replace(/(src|href|action)\\s*=\\s*\'(?!https?:|data:|blob:|#|\\/\\/)([^\']*)\'/gi,',
+              '      function(m,a,p){return a+"=\'"+base+p+"\'"});',
+              '    var blob=new Blob([t],{type:"text/html"});',
+              '    document.getElementById("fg-iframe").src=URL.createObjectURL(blob);',
+              '  }).catch(function(){document.getElementById("fg-iframe").src=url;});',
+              '}'
+            ].join('\n')
+          );
+
+          
+          html = html.replace(/href="\/ai\.html"/g,   'href="https://levitator-lagging-dynamic.ngrok-free.dev/ai.html"');
+          html = html.replace(/href="\/chat\.html"/g, 'href="https://levitator-lagging-dynamic.ngrok-free.dev/chat.html"');
+          // For ngrok URLs, skip fetch+blob and load directly in iframe
+          html = html.replace(
+            'window.fgOpen = function(gameUrl, title) {',
+            'window.fgOpen = function(gameUrl, title) {\n' +
+            '    if (/ngrok-free\\.dev/i.test(gameUrl)) {\n' +
+            '      document.getElementById("fg-title").textContent = title || "game";\n' +
+            '      document.getElementById("fg-loading").style.display = "none";\n' +
+            '      document.getElementById("fg-viewer").classList.add("open");\n' +
+            '      document.body.style.overflow = "hidden";\n' +
+            '      document.getElementById("fg-iframe").src = gameUrl;\n' +
+            '      return;\n' +
+            '    }'
+          );
+
+          // Fix download button: actually download the current game's HTML
+          html = html.replace(
+            /window\.fgDownload\s*=\s*function\s*\(\)\s*\{[\s\S]*?\};/,
+            'window.fgDownload = function() {' +
+            '  if (!currentGameUrl) return;' +
+            '  fetch(currentGameUrl).then(function(r){return r.text();}).then(function(t){' +
+            '    var b=new Blob([t],{type:"text/html"});' +
+            '    var a=document.createElement("a");' +
+            '    a.href=URL.createObjectURL(b);' +
+            '    a.download=(currentTitle||"game")+".html";' +
+            '    a.click();' +
+            '  });' +
+            '};'
+          );
+
+          
+          html = html.replace(
+            'window.fgOpenGameTab = function() {\n    if (currentGameUrl) window.open(currentGameUrl, \'_blank\');\n  };',
+            'window.fgOpenGameTab = function() {' +
+            '  if (!currentGameUrl) return;' +
+            '  var w = window.open("about:blank","_blank");' +
+            '  fetch(currentGameUrl).then(function(r){return r.text();}).then(function(t){' +
+            '    w.document.open();w.document.write(t);w.document.close();' +
+            '  });' +
+            '};'
+          );
+
+          // Inject <base> so remaining relative refs resolve
+          var base = '<base href="' + pageUrl + '">';
+          html = /<head[\s>]/i.test(html)
+            ? html.replace(/(<head[^>]*>)/i, '$1' + base)
+            : base + html;
+
+          var blob = new Blob([html], { type: 'text/html' });
+          document.getElementById('game-frame').src = URL.createObjectURL(blob);
+        });
+      })();
+    ]]>
+  </script>
+</svg>
